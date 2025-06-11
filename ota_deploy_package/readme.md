@@ -39,6 +39,7 @@ ota_deploy_package
 - Builds ESP-IDF firmware using PlatformIO
 - Automatically signs and verifies firmware using OpenSSL
 - Uploads firmware and signature to AWS S3
+- After uploading firmware to S3, a downloadable API URL is generated using a predefined AWS API Gateway endpoint.
 - Stores versioned firmware metadata in PostgreSQL
 - Sends firmware update notification to ESP32 devices via AWS IoT Core
 - Supports secure updates with version conflict checks

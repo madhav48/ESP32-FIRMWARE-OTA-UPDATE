@@ -50,10 +50,13 @@ async function deployPipeline({ firmwareVersion, changelog, deployedBy }) {
       checksum
     });
 
+    // API URL..
+    const apiGatewayFirmwareDownloadUrl = `${process.env.API_GATEWAY_BASE_URL}/firmware/${firmwareVersion}`;
+
     // Trigger Lambda
     await triggerLambda({
       version: firmwareVersion,
-      firmwareUrl: firmwareUrl,
+      firmwareUrl: apiGatewayFirmwareDownloadUrl,
       signatureUrl: sigUrl,
       checksum: checksum
     });
@@ -62,9 +65,8 @@ async function deployPipeline({ firmwareVersion, changelog, deployedBy }) {
       - Version     : ${firmwareVersion}
       - Deployed By : ${deployedBy}
       - Changelog   : ${changelog}
-      - Firmware URL: ${firmwareUrl}
+      - Firmware URL: ${apiGatewayFirmwareDownloadUrl}
       - Signature URL: ${sigUrl}`);
-
 
     // logger.success('OTA update deployed successfully!');
   } catch (err) {

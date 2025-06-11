@@ -45,6 +45,7 @@ This Node.js package provides a complete backend pipeline to support Over-the-Ai
 - **Firmware Building**: Builds ESP-IDF firmware using PlatformIO.
 - **Secure Signing**: Automatically signs and verifies firmware using OpenSSL (RSA).
 - **Cloud Storage**: Uploads firmware binaries and signatures to AWS S3.
+- **API URL Generation and Delivery**: After uploading firmware to S3, a downloadable API URL is generated using a predefined AWS API Gateway endpoint.
 - **Metadata Management**: Stores versioned firmware metadata (version, changelog, URL, checksum) in PostgreSQL.
 - **Device Notification**: Sends firmware update notifications to ESP32 devices via AWS IoT Core (MQTT broker), triggered by an AWS Lambda function.
 - **Version Control**: Supports secure updates with automatic version management and conflict checks.
@@ -178,5 +179,29 @@ factory,    app,  factory, 0x10000,    0x150000
 ota_0,      app,  ota_0,   0x160000,   0xD0000
 spiffs,     data, spiffs,  0x230000,   0x1D0000
 ```
+
+---
+
+## Firmware Delivery Process
+
+Once a new firmware version is built and uploaded to the AWS S3 bucket, a downloadable URL is generated using a predefined API Gateway endpoint. This URL provides secure and authenticated access to the firmware using an API key.
+
+### Delivery Flow:
+
+1. **Upload to S3**: The signed firmware `.bin` and its corresponding signature are uploaded to a protected S3 bucket.
+2. **API Gateway Integration**: A versioned download URL is generated dynamically using the AWS API Gateway. This gateway triggers a Lambda function that delivers the firmware **in small chunks**, which is particularly helpful in environments with **poor or unstable connectivity**, ensuring continuity.
+3. **MQTT Notification**: This download URL, along with metadata like version, changelog, and SHA256 checksum, is sent to all relevant devices via MQTT through AWS IoT Core.
+4. **Secure Download**:
+    - The ESP32 uses the `HttpDownloader` module to initiate a secure HTTPS connection to the URL.
+    - Custom HTTP headers like `x-api-key` and `Accept: application/octet-stream` are added to ensure proper authentication and MIME handling.
+    - The ESP32 reads the file in **streamed (chunked)** fashion using `esp_http_client_read`, avoiding memory overflow.
+5. **Validation**:
+    - After download, the firmware's SHA256 hash is verified.
+    - The RSA digital signature is validated using the previously flashed public key.
+6. **Flashing and Reboot**:
+    - On successful verification, the firmware is written to the OTA partition.
+    - The boot partition is updated, and the device reboots into the new firmware version.
+
+> This architecture ensures firmware is delivered in a **secure** and **memory-efficient**  way.
 
 ---
