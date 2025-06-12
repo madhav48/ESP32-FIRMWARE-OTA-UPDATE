@@ -1,7 +1,7 @@
 
 # ESP32 Firmware OTA Update 
 
-This repository contains the complete infrastructure for the Over-the-Air (OTA) firmware update system for ESP32 device. It is divided into two primary sections: the `ota_deploy_package` (backend for managing and deploying firmware) and the `esp_firmware_projects` (the device-side firmware, including a bootloader and the main application).
+This repository contains the complete infrastructure for the Over-the-Air (OTA) firmware update system for ESP32 device. It is divided into two primary sections: the `ota_deploy_package` (backend for managing and deploying firmware) and the `esp_firmware_projects` (the device-side firmware).
 
 ## Directory Tree
 ```
@@ -21,16 +21,10 @@ This repository contains the complete infrastructure for the Over-the-Air (OTA) 
 │       ├── s3Uploader.js
 │       └── signer.js
 └── esp_firmware_projects/
-    ├── main_app/             # Main application firmware
-    │   ├── components/
-    │   │   ├── Common/
-    │   │   └── OTAUpdateChecker/
-    │   ├── src/
-    │   └── partitions.csv
-    └── ota_loader/           # Dedicated OTA bootloader firmware
+    └── esp32_project/
         ├── components/
         │   ├── Common/
-        │   └── OTAUpdateManager/
+        │   └── OTAUpdateManager/  # Implements complete OTA logic
         ├── src/
         └── partitions.csv
 ```
@@ -88,10 +82,11 @@ To deploy a new firmware version:
 
 ```bash
 cd ota_deploy_package
-node cli.js deploy --version="1.0.0" --changelog="Initial Release"
+node cli.js deploy --version="1.0.0" --changelog="Initial Release" --target="targetDevices.json"
 ```
 
-(If `--version` is omitted, a patch version is auto-generated based on the latest in the database.)
+> If `--version` is omitted, a patch version is auto-generated based on the latest in the database.
+> For targeted delivery, pass the json file with MAC adress to `--target`. If ommited, firmware will be broadcasted to the fleet 
 
 ### AWS Setup (Backend)
 
@@ -103,42 +98,22 @@ node cli.js deploy --version="1.0.0" --changelog="Initial Release"
 
 ## II. esp_firmware_projects (ESP32 Device Firmware)
 
-This section contains the firmware designed for the ESP32 devices, implementing a robust and secure OTA update mechanism using a dual-project approach.
+This section contains the firmware designed for the ESP32 device, implementing a robust and secure OTA update mechanism.
 
-### Architecture Overview
 
-The system is structured into two separate projects for modularity and security:
-
-- **ota_loader**: A minimal, secure bootloader that runs first. It's responsible for checking for and installing updates.
-- **main_app**: The actual application firmware that handles the device's primary logic and triggers the `ota_loader` when an update is available.
-
-### main_app
+### esp32_project (main_app)
 
 - Runs the device's application logic.
-- Subscribes to `/firmware_update` MQTT topic.
+- Subscribes to `/firmware_update` & `/firmware_update/<MAC-ID>` MQTT topic.
 - Parses firmware metadata (version, URL, signature) from MQTT JSON payload.
-- Uses the `OTAUpdateChecker` component to:
+- Uses `OTAUpdateManager` to:
   - Compare current vs. target firmware versions.
-  - Switch the boot partition to trigger `ota_loader`.
-  - Initiate a system reboot.
+  - Handle secure firmware download via HTTPS.
+  - Stream firmware and write to OTA partition.
+  - Verify SHA256 checksum and RSA signature.
+  - Finalize OTA write and set the new partition as boot.
+  - Store new version in NVS and reboot.
 
-#### Custom Library: OTAUpdateChecker
-
-- Purpose: Performs lightweight checks to determine if an update is needed.
-- Responsibilities: Version comparison, triggering reboot, and switching boot partition to `ota_loader`.
-
-### ota_loader
-
-- Dedicated bootloader responsible for downloading, verifying, and flashing new firmware.
-
-#### Key Features:
-
-- Executes from the factory partition.
-- Downloads firmware and signature from a remote server (e.g., AWS S3).
-- Performs SHA256 hash and RSA digital signature validation.
-- Writes new firmware to the OTA partition using `esp_ota_ops`.
-- Updates the boot partition and stores version info using NVS.
-- Reboots into the new main application.
 
 #### Custom Library: OTAUpdateManager
 
@@ -147,25 +122,8 @@ The system is structured into two separate projects for modularity and security:
   - NVSStorageHandler: Manages persistent version tracking.
   - HTTPDownloader: Downloads binaries and signatures.
   - SignatureVerifier: Validates firmware integrity (SHA256, RSA).
-  - FirmwareFlasher: Writes firmware to OTA partition.
   - OTAUpdateManager: Orchestrates the entire OTA workflow.
 
-### OTA Workflow
-
-1. **Bootloader Startup** (factory partition):
-    - Checks for new firmware.
-    - If available, downloads, verifies, and flashes it to `ota_0` partition.
-
-2. **Main Application Execution** (`ota_0`):
-    - Connects to Wi-Fi/MQTT.
-    - Subscribes to update topic.
-    - Compares versions.
-    - Triggers bootloader if update required.
-
-3. **Bootloader Flashing**:
-    - Downloads new OTA image.
-    - Validates and flashes it.
-    - Sets boot partition and reboots device.
 
 ### Partition Table
 
@@ -175,9 +133,8 @@ The common partition table ensures proper memory allocation:
 # Name,     Type, SubType, Offset,     Size
 nvs,        data, nvs,     0x9000,     0x5000
 otadata,    data, ota,     0xE000,     0x2000
-factory,    app,  factory, 0x10000,    0x150000
-ota_0,      app,  ota_0,   0x160000,   0xD0000
-spiffs,     data, spiffs,  0x230000,   0x1D0000
+ota_0,      app,  ota_0,   0x10000,    0x1E0000
+ota_1,      app,  ota_1,   0x1F0000,   0x1E0000
 ```
 
 ---
