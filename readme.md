@@ -20,7 +20,7 @@ This repository contains the complete infrastructure for the Over-the-Air (OTA) 
 │       ├── lambda.js
 │       ├── s3Uploader.js
 │       └── signer.js
-└── esp_firmware_projects/
+└── esp_firmware_project/
     └── esp32_project/
         ├── components/
         │   ├── Common/
@@ -96,7 +96,7 @@ For targeted delivery, pass the json file with MAC adress to `--target`. If ommi
 
 ---
 
-## II. esp_firmware_projects (ESP32 Device Firmware)
+## II. esp_firmware_project (ESP32 Device Firmware)
 
 This section contains the firmware designed for the ESP32 device, implementing a robust and secure OTA update mechanism.
 
