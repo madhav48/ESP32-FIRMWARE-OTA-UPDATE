@@ -1,7 +1,7 @@
 
 # ESP32 Firmware OTA Update 
 
-This repository contains the complete infrastructure for the Over-the-Air (OTA) firmware update system for ESP32 device. It is divided into two primary sections: the `ota_deploy_package` (backend for managing and deploying firmware) and the `esp_firmware_projects` (the device-side firmware).
+This repository contains the complete infrastructure for the Over-the-Air (OTA) firmware update system for ESP32 device. It is divided into two primary sections: the `ota_deploy_package` (backend for managing and deploying firmware) and the `esp_firmware_project` (the device-side firmware).
 
 ## Directory Tree
 ```
@@ -86,7 +86,7 @@ node cli.js deploy --version="1.0.0" --changelog="Initial Release" --target="tar
 ```
 
 > If `--version` is omitted, a patch version is auto-generated based on the latest in the database.
-> For targeted delivery, pass the json file with MAC adress to `--target`. If ommited, firmware will be broadcasted to the fleet 
+For targeted delivery, pass the json file with MAC adress to `--target`. If ommited, firmware will be broadcasted to the fleet 
 
 ### AWS Setup (Backend)
 
