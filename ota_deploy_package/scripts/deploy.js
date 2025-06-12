@@ -2,6 +2,7 @@ const { buildFirmware } = require('./buildPlatformIO');
 const { signFirmware } = require('./signer');
 const { uploadFirmware } = require('./s3Uploader');
 const { checkVersionExists, saveMetadata, getLatestVersion } = require('./db');
+const { getTargetMACsFromFile } = require('./targetList');
 const { triggerLambda } = require('./lambda');
 const logger = require('../services/logger');
 const fs = require('fs');
@@ -54,12 +55,29 @@ async function deployPipeline({ firmwareVersion, changelog, deployedBy }) {
     const apiGatewayFirmwareDownloadUrl = `${process.env.API_GATEWAY_BASE_URL}/firmware/${firmwareVersion}`;
 
     // Trigger Lambda
-    await triggerLambda({
-      version: firmwareVersion,
-      firmwareUrl: apiGatewayFirmwareDownloadUrl,
-      signatureUrl: sigUrl,
-      checksum: checksum
-    });
+    if (targetFile) {
+      const macList = getTargetMACsFromFile(targetFile);
+      for (const mac of macList) {
+        const topic = `firmware_update/${mac}`;
+        logger.info(`Triggering OTA update for MAC: ${mac} on topic: ${topic}`);
+        await triggerLambda({
+          version: firmwareVersion,
+          firmwareUrl: apiGatewayFirmwareDownloadUrl,
+          signatureUrl: sigUrl,
+          checksum: checksum,
+          topic: topic
+        });
+      }
+    } else {
+      await triggerLambda({
+        version: firmwareVersion,
+        firmwareUrl: apiGatewayFirmwareDownloadUrl,
+        signatureUrl: sigUrl,
+        checksum: checksum,
+        topic: 'firmware_update'
+      });
+    }
+
 
     logger.success(`The firmware has been deployed successfully. Here are the details:
       - Version     : ${firmwareVersion}

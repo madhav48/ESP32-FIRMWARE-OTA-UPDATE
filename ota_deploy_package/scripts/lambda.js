@@ -15,7 +15,8 @@ async function triggerLambda(metadata) {
         version: metadata.version,
         firmware_url: metadata.firmwareUrl,
         signature_url: metadata.signatureUrl,
-        checksum: metadata.checksum
+        checksum: metadata.checksum,
+        topic: metadata.topic
       }
     };
 
@@ -25,7 +26,6 @@ async function triggerLambda(metadata) {
     }).promise();
 
     logger.success('Lambda triggered successfully!');
-    // logger.info(`Lambda response: ${result.StatusCode} - ${result.Payload}`);
 
     const recv_payload = JSON.parse(result.Payload);
 

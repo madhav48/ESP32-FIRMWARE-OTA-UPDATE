@@ -15,6 +15,9 @@ extern "C"
 #include "esp_vfs.h"
 #include "esp_vfs_fat.h"
 #include "esp_ota_ops.h"
+#include "esp_system.h" 
+#include "esp_mac.h"     
+#include "esp_wifi.h"
 }
 
 #include "Common/certificates.h"
@@ -28,12 +31,31 @@ inline const char *TAG = "OTA-Boot Loader";
 
 int retry_num = 0;
 static esp_mqtt_client_handle_t mqtt_client = nullptr;
+char device_firmware_topic[64];
 
 static void wifi_init();
 static void mqtt_init();
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event);
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 static void wifi_event_handler(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
+
+
+void generate_device_firmware_topic() {
+    uint8_t mac[6];
+    esp_err_t err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read MAC: %s", esp_err_to_name(err));
+        return;
+    }
+
+    snprintf(device_firmware_topic, sizeof(device_firmware_topic),
+             "firmware_update/%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    ESP_LOGI(TAG, "Device-specific topic: %s", device_firmware_topic);
+}
+
 
 void init_spiffs()
 {
@@ -146,8 +168,10 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
     printf("Data: %.*s\n", event->data_len, event->data);
 
     // Check for firmware Update..
-    if (event->topic_len == strlen("firmware_update") &&
-        strncmp((const char *)event->topic, "firmware_update", event->topic_len) == 0)
+    if ((event->topic_len == strlen("firmware_update") &&
+         strncmp((const char *)event->topic, "firmware_update", event->topic_len) == 0) ||
+        (event->topic_len == strlen(device_firmware_topic) &&
+         strncmp((const char *)event->topic, device_firmware_topic, event->topic_len) == 0))
     {
       auto *params = new ota_task_params_t{std::string(event->data, event->data_len)};
       xTaskCreate(&ota_update_task, "ota_update_task", 8192, params, 5, NULL);
@@ -204,6 +228,7 @@ extern "C" void app_main(void)
 
   // Delay to allow WiFi connection to establish before starting MQTT
   vTaskDelay(5000 / portTICK_PERIOD_MS);
+  generate_device_firmware_topic();
   mqtt_init();
 
   while (true)  // Wait for the firmware Update.
